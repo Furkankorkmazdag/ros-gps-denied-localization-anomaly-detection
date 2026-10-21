@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Configure these for your vehicle/sensor. For SITL, see README.md. -->
+  <arg name="fcu_url" default="udp://127.0.0.1:14550@"/>
+  <arg name="start_mavros" default="true"/>
+  <arg name="start_slam" default="true"/>
+  <arg name="start_odometry_bridge" default="true"/>
+  <arg name="start_anomaly_detection" default="true"/>
+  <arg name="start_rviz" default="true"/>
+  <arg name="scan_topic" default="/spur/laser/scan"/>
+  <arg name="image_topic" default="/webcam/image_raw"/>
+  <arg name="slam_pose_topic" default="/slam_out_pose"/>
+  <arg name="height_topic" default="/mavros/local_position/pose"/>
+  <arg name="checkpoint" default="$(find localization_and_anomaly_detection)/models/model.ckpt"/>
+  <arg name="base_frame" default="base_link"/>
+  <arg name="laser_frame" default="laser"/>
+
+  <param name="/use_sim_time" value="false"/>
+
+  <group if="$(arg start_mavros)">
+    <include file="$(find mavros)/launch/node.launch">
+      <arg name="fcu_url" value="$(arg fcu_url)"/>
+      <arg name="gcs_url" value=""/>
+      <arg name="tgt_system" value="1"/>
+      <arg name="tgt_component" value="1"/>
+      <arg name="fcu_protocol" value="v2.0"/>
+      <arg name="pluginlists_yaml" value="$(find mavros)/launch/apm_pluginlists.yaml"/>
+      <arg name="config_yaml" value="$(find mavros)/launch/apm_config.yaml"/>
+    </include>
+  </group>
+
+  <group if="$(arg start_slam)">
+    <!-- Adjust this transform to the actual LiDAR mounting position and frame IDs. -->
+    <node pkg="tf" type="static_transform_publisher" name="base_to_laser"
+          args="0 0 0.171 0 0 0 $(arg base_frame) $(arg laser_frame) 100"/>
+    <node pkg="hector_mapping" type="hector_mapping" name="hector_mapping" output="screen">
+      <param name="map_frame" value="map"/>
+      <param name="base_frame" value="$(arg base_frame)"/>
+      <param name="odom_frame" value="$(arg base_frame)"/>
+      <param name="use_tf_scan_transformation" value="true"/>
+      <param name="use_tf_pose_start_estimate" value="false"/>
+      <param name="pub_map_odom_transform" value="true"/>
+      <param name="map_resolution" value="0.05"/>
+      <param name="map_size" value="2048"/>
+      <param name="map_start_x" value="0.5"/>
+      <param name="map_start_y" value="0.5"/>
+      <param name="map_multi_res_levels" value="5"/>
+      <param name="update_factor_free" value="0.4"/>
+      <param name="update_factor_occupied" value="0.9"/>
+      <param name="map_update_distance_thresh" value="0.01"/>
+      <param name="map_update_angle_thresh" value="0.001"/>
+      <param name="laser_z_min_value" value="-0.1"/>
+      <param name="laser_z_max_value" value="0.1"/>
+      <param name="advertise_map_service" value="true"/>
+      <param name="scan_subscriber_queue_size" value="5"/>
+      <remap from="scan" to="$(arg scan_topic)"/>
+    </node>
+  </group>
+
+  <group if="$(arg start_odometry_bridge)">
+    <node pkg="localization_and_anomaly_detection" type="slam_to_fcu_odometry.py"
+          name="slam_to_fcu_odometry" output="screen">
+      <param name="input_topic" value="$(arg slam_pose_topic)"/>
+      <param name="output_topic" value="/mavros/odometry/in"/>
+      <param name="parent_frame" value="map"/>
+      <param name="child_frame" value="$(arg base_frame)"/>
+      <param name="stale_timeout" value="0.5"/>
+      <param name="max_velocity" value="5.0"/>
+    </node>
+  </group>
+
+  <group if="$(arg start_anomaly_detection)">
+    <node pkg="localization_and_anomaly_detection" type="anomaly_detection_node.py"
+          name="patchcore_slam_anomaly_map" output="screen">
+      <param name="image_topic" value="$(arg image_topic)"/>
+      <param name="slam_pose_topic" value="$(arg slam_pose_topic)"/>
+      <param name="height_topic" value="$(arg height_topic)"/>
+      <param name="marker_topic" value="/anomaly_markers"/>
+      <param name="map_frame" value="map"/>
+      <env name="PATCHCORE_CHECKPOINT" value="$(arg checkpoint)"/>
+    </node>
+  </group>
+
+  <group if="$(arg start_rviz)">
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find localization_and_anomaly_detection)/rviz/anomaly_mapping.rviz" output="screen"/>
+  </group>
+</launch>

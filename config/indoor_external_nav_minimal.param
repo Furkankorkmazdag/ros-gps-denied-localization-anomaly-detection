@@ -1,0 +1,11 @@
+# Minimal GPS-denied ExternalNav overlay for review, NOT a complete vehicle configuration.
+# Confirm parameter availability/enums for the exact ArduCopter firmware before use.
+# Deliberately excludes RC calibration, compass calibration, motor tuning,
+# battery failsafes, serial-port wiring and other vehicle-specific values.
+GPS1_TYPE,0
+VISO_TYPE,1
+EK3_SRC1_POSXY,6
+EK3_SRC1_VELXY,6
+EK3_SRC1_POSZ,2
+EK3_SRC1_VELZ,0
+EK3_SRC1_YAW,6
